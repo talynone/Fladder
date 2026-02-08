@@ -5,7 +5,7 @@
 #endif
 
 [Setup]
-AppId={{D573EDD5-117A-47AD-88AC-62C8EBD11DC7}
+AppId={{D573EDD5-117A-47AD-88AC-62C8EBD11DC8}
 AppName="Fladder"
 AppVersion={#FLADDER_VERSION}
 AppPublisher="DonutWare"
@@ -25,7 +25,7 @@ WizardStyle=modern
 
 SetupLogging=yes
 UninstallLogging=yes
-UninstallDisplayName="Fladder"
+UninstallDisplayName="Fladder (ARM64)"
 UninstallDisplayIcon={app}\fladder.exe
 SetupIconFile="{#SourcePath}\icons\production\fladder_icon.ico"
 LicenseFile="{#SourcePath}\LICENSE"
