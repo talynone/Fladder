@@ -31,34 +31,25 @@ class DirectPlaybackModel extends PlaybackModel {
   });
 
   @override
-  List<SubStreamModel> get subStreams =>
-      [SubStreamModel.no(), ...mediaStreams?.subStreams ?? []];
+  List<SubStreamModel> get subStreams => [SubStreamModel.no(), ...mediaStreams?.subStreams ?? []];
 
   List<jellyfin.QueueItem> get itemsInQueue => queue
-      .mapIndexed((index, element) => jellyfin.QueueItem(
-          id: element.id, playlistItemId: "playlistItem$index"))
+      .mapIndexed((index, element) => jellyfin.QueueItem(id: element.id, playlistItemId: "playlistItem$index"))
       .toList();
 
   @override
-  Future<DirectPlaybackModel> setSubtitle(
-      SubStreamModel? model, MediaControlsWrapper player) async {
+  Future<DirectPlaybackModel> setSubtitle(SubStreamModel? model, MediaControlsWrapper player) async {
     final newIndex = await player.setSubtitleTrack(model, this);
-    return copyWith(
-        mediaStreams: () =>
-            mediaStreams?.copyWith(defaultSubStreamIndex: newIndex));
+    return copyWith(mediaStreams: () => mediaStreams?.copyWith(defaultSubStreamIndex: newIndex));
   }
 
   @override
-  List<AudioStreamModel> get audioStreams =>
-      [AudioStreamModel.no(), ...mediaStreams?.audioStreams ?? []];
+  List<AudioStreamModel> get audioStreams => [AudioStreamModel.no(), ...mediaStreams?.audioStreams ?? []];
 
   @override
-  Future<DirectPlaybackModel>? setAudio(
-      AudioStreamModel? model, MediaControlsWrapper player) async {
+  Future<DirectPlaybackModel>? setAudio(AudioStreamModel? model, MediaControlsWrapper player) async {
     final newIndex = await player.setAudioTrack(model, this);
-    return copyWith(
-        mediaStreams: () =>
-            mediaStreams?.copyWith(defaultAudioStreamIndex: newIndex));
+    return copyWith(mediaStreams: () => mediaStreams?.copyWith(defaultAudioStreamIndex: newIndex));
   }
 
   @override
@@ -88,8 +79,7 @@ class DirectPlaybackModel extends PlaybackModel {
   }
 
   @override
-  Future<PlaybackModel?> playbackStopped(
-      Duration position, Duration? totalDuration, Ref ref) async {
+  Future<PlaybackModel?> playbackStopped(Duration position, Duration? totalDuration, Ref ref) async {
     ref.read(playBackModel.notifier).update((state) => null);
 
     await ref.read(jellyApiProvider).sessionsPlayingStoppedPost(
@@ -105,8 +95,7 @@ class DirectPlaybackModel extends PlaybackModel {
   }
 
   @override
-  Future<PlaybackModel?> updatePlaybackPosition(
-      Duration position, bool isPlaying, Ref ref) async {
+  Future<PlaybackModel?> updatePlaybackPosition(Duration position, bool isPlaying, Ref ref) async {
     final api = ref.read(jellyApiProvider);
     await api.sessionsPlayingProgressPost(
       body: jellyfin.PlaybackProgressInfo(
@@ -138,8 +127,7 @@ class DirectPlaybackModel extends PlaybackModel {
   }
 
   @override
-  String toString() =>
-      'DirectPlaybackModel(item: $item, playbackInfo: $playbackInfo)';
+  String toString() => 'DirectPlaybackModel(item: $item, playbackInfo: $playbackInfo)';
 
   @override
   DirectPlaybackModel copyWith({
@@ -159,8 +147,7 @@ class DirectPlaybackModel extends PlaybackModel {
       media: media != null ? media() : this.media,
       playbackInfo: playbackInfo ?? this.playbackInfo,
       mediaStreams: mediaStreams != null ? mediaStreams() : this.mediaStreams,
-      mediaSegments:
-          mediaSegments != null ? mediaSegments() : this.mediaSegments,
+      mediaSegments: mediaSegments != null ? mediaSegments() : this.mediaSegments,
       chapters: chapters != null ? chapters() : this.chapters,
       trickPlay: trickPlay != null ? trickPlay() : this.trickPlay,
       queue: queue ?? this.queue,
