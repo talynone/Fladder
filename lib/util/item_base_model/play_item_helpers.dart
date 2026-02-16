@@ -89,6 +89,14 @@ extension PhotoAlbumExtension on PhotoAlbumModel? {
 
     final getChildItems = await op.valueOrCancellation(null);
     if (op.isCanceled || getChildItems == null) {
+      try {
+        Navigator.of(context, rootNavigator: true).pop();
+      } catch (e) {
+        log('Error closing loading dialog: $e');
+      }
+      if (!op.isCanceled) {
+        FladderSnack.show(context.localized.unableToPlayMedia, context: context);
+      }
       return;
     }
 
@@ -138,6 +146,14 @@ extension ChannelModelExtension on ChannelModel? {
     final model = await op.valueOrCancellation(null);
 
     if (op.isCanceled || model == null) {
+      try {
+        Navigator.of(context, rootNavigator: true).pop();
+      } catch (e) {
+        log('Error closing loading dialog: $e');
+      }
+      if (!op.isCanceled) {
+        FladderSnack.show(context.localized.unableToPlayMedia, context: context);
+      }
       return;
     }
 
@@ -192,7 +208,17 @@ extension ItemBaseModelExtensions on ItemBaseModel? {
     _showLoadingIndicator(context, itemModel, op);
 
     final model = await op.valueOrCancellation(null);
-    if (op.isCanceled || model == null) return;
+    if (op.isCanceled || model == null) {
+      try {
+        Navigator.of(context, rootNavigator: true).pop();
+      } catch (e) {
+        log('Error closing loading dialog: $e');
+      }
+      if (!op.isCanceled && !showPlaybackOption) {
+        FladderSnack.show(context.localized.unableToPlayMedia, context: context);
+      }
+      return;
+    }
 
     await _playVideo(context, startPosition: startPosition, current: model, ref: ref, cancelOperation: op);
   }
@@ -233,7 +259,17 @@ extension ItemBaseModelsBooleans on List<ItemBaseModel> {
     _showLoadingIndicator(context, null, op);
 
     final result = await op.valueOrCancellation(null);
-    if (op.isCanceled || result == null) return;
+    if (op.isCanceled || result == null) {
+      try {
+        Navigator.of(context, rootNavigator: true).pop();
+      } catch (e) {
+        log('Error closing loading dialog: $e');
+      }
+      if (!op.isCanceled) {
+        FladderSnack.show(context.localized.unableToPlayMedia, context: context);
+      }
+      return;
+    }
 
     final PlaybackModel? model = result.$1;
     final List<ItemBaseModel> expandedList = result.$2;
@@ -263,6 +299,8 @@ class _LoadIndicatorCancelable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = const BorderRadius.all(Radius.circular(4));
+
     return Dialog(
       constraints: const BoxConstraints(
         maxWidth: 450,
@@ -294,7 +332,14 @@ class _LoadIndicatorCancelable extends StatelessWidget {
                             child: Padding(
                               padding: const EdgeInsets.all(8.0),
                               child: Container(
-                                decoration: FladderTheme.defaultPosterDecoration,
+                                decoration: BoxDecoration(
+                                  borderRadius: radius,
+                                  color: Theme.of(context).colorScheme.surfaceContainer,
+                                ),
+                                foregroundDecoration: BoxDecoration(
+                                  borderRadius: radius,
+                                  border: Border.all(width: 1, color: Colors.white.withAlpha(45)),
+                                ),
                                 clipBehavior: Clip.hardEdge,
                                 child: FladderImage(
                                   image: item!.getPosters?.primary,

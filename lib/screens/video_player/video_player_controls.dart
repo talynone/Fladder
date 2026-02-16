@@ -444,13 +444,11 @@ class _DesktopControlsState extends ConsumerState<DesktopControls> {
         final playbackModel = ref.watch(playBackModel);
         final item = playbackModel?.item;
         final List<String?> details = [
-          if (AdaptiveLayout.of(context).isDesktop) item?.label(context),
-          mediaPlayback.duration.inMinutes < mediaPlayback.position.inMinutes
-              ? context.localized.endsAt(DateTime.now().add(Duration(
-                  milliseconds: (mediaPlayback.duration.inMilliseconds - mediaPlayback.position.inMilliseconds) ~/
-                      ref.read(playbackRateProvider),
-                )))
-              : null
+          if (AdaptiveLayout.of(context).isDesktop) item?.label(context.localized),
+          context.localized.endsAt(DateTime.now().add(Duration(
+            milliseconds: (mediaPlayback.duration.inMilliseconds - mediaPlayback.position.inMilliseconds) ~/
+                ref.read(playbackRateProvider),
+          )))
         ];
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -531,7 +529,7 @@ class _DesktopControlsState extends ConsumerState<DesktopControls> {
       builder: (context, ref, child) {
         final previousVideo = ref.watch(playBackModel.select((value) => value?.previousVideo));
         return Tooltip(
-          message: previousVideo?.detailedName(context) ?? "",
+          message: previousVideo?.detailedName(context.localized) ?? "",
           textAlign: TextAlign.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
@@ -561,7 +559,7 @@ class _DesktopControlsState extends ConsumerState<DesktopControls> {
       builder: (context, ref, child) {
         final nextVideo = ref.watch(playBackModel.select((value) => value?.nextVideo));
         return Tooltip(
-          message: nextVideo?.detailedName(context) ?? "",
+          message: nextVideo?.detailedName(context.localized) ?? "",
           textAlign: TextAlign.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
@@ -796,16 +794,14 @@ class _DesktopControlsState extends ConsumerState<DesktopControls> {
   // --- Touch Gesture Handlers (Mobile) ---
 
   void _handleDoubleTapDown(TapDownDetails details) {
-    final doubleTapSeekEnabled =
-        ref.read(videoPlayerSettingsProvider.select((value) => value.enableDoubleTapSeek));
+    final doubleTapSeekEnabled = ref.read(videoPlayerSettingsProvider.select((value) => value.enableDoubleTapSeek));
     if (doubleTapSeekEnabled) {
       _doubleTapPosition = details.globalPosition;
     }
   }
 
   void _handleDoubleTapSeek() {
-    final doubleTapSeekEnabled =
-        ref.read(videoPlayerSettingsProvider.select((value) => value.enableDoubleTapSeek));
+    final doubleTapSeekEnabled = ref.read(videoPlayerSettingsProvider.select((value) => value.enableDoubleTapSeek));
     if (!doubleTapSeekEnabled) return;
 
     final screenWidth = MediaQuery.sizeOf(context).width;
