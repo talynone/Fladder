@@ -8,11 +8,13 @@ import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:fladder/jellyfin/jellyfin_open_api.enums.swagger.dart' as enums;
+import 'package:fladder/models/account_model.dart';
 import 'package:fladder/models/seerr_credentials_model.dart';
 import 'package:fladder/providers/connectivity_provider.dart';
 import 'package:fladder/providers/cultures_provider.dart';
 import 'package:fladder/providers/seerr_user_provider.dart';
 import 'package:fladder/providers/settings/client_settings_provider.dart';
+import 'package:fladder/providers/shared_provider.dart';
 import 'package:fladder/providers/update_notifications_provider.dart';
 import 'package:fladder/providers/user_provider.dart';
 import 'package:fladder/screens/settings/settings_list_tile.dart';
@@ -25,6 +27,7 @@ import 'package:fladder/screens/settings/widgets/settings_message_box.dart';
 import 'package:fladder/screens/shared/authenticate_button_options.dart';
 import 'package:fladder/screens/shared/input_fields.dart';
 import 'package:fladder/seerr/seerr_models.dart';
+import 'package:fladder/services/battery_optimization.dart';
 import 'package:fladder/services/notification_service.dart';
 import 'package:fladder/util/jellyfin_extension.dart';
 import 'package:fladder/util/localization_helper.dart';
@@ -40,7 +43,10 @@ class ProfileSettingsPage extends ConsumerStatefulWidget {
   ConsumerState<ConsumerStatefulWidget> createState() => _UserSettingsPageState();
 }
 
-class _UserSettingsPageState extends ConsumerState<ProfileSettingsPage> {
+class _UserSettingsPageState extends ConsumerState<ProfileSettingsPage> with WidgetsBindingObserver {
+  bool? enabledBatteryOptimization;
+  DateTime? lastUpdateDate;
+
   String _seerrStatusLabel(
     BuildContext context,
     SeerrCredentialsModel? credentials,
@@ -58,6 +64,46 @@ class _UserSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     }
 
     return context.localized.none;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      checkBatteryOptimization();
+      checkLastUpdateDate();
+    });
+  }
+
+  Future<bool> checkBatteryOptimization() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      final optimizing = !(await BatteryOptimization.isIgnoringBatteryOptimizations());
+      setState(() {
+        enabledBatteryOptimization = optimizing;
+      });
+      return optimizing;
+    }
+    return true;
+  }
+
+  void checkLastUpdateDate() {
+    lastUpdateDate = ref.read(sharedUtilityProvider).getLastSeenNotifications().updatedAt;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      checkBatteryOptimization();
+      checkLastUpdateDate();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
@@ -91,6 +137,18 @@ class _UserSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                   ref.read(userProvider.notifier).updateUser(newUser);
                 },
               ),
+            ),
+            SettingsListTileCheckbox(
+              label: Text(context.localized.profileSettingsOpenAuthAtLaunch),
+              value: user?.askForAuthOnLaunch ?? false,
+              onChanged: user?.authMethod != Authentication.none
+                  ? (val) async {
+                      if (user == null || val == null) return;
+                      ref.read(userProvider.notifier).updateUser(
+                            user.copyWith(askForAuthOnLaunch: val),
+                          );
+                    }
+                  : null,
             ),
             SettingsListTile(
               label: Text(context.localized.password),
@@ -160,7 +218,7 @@ class _UserSettingsPageState extends ConsumerState<ProfileSettingsPage> {
             ),
           ],
         ),
-        if (ref.read(supportsNotificationsProvider)) ...[
+        if (ref.watch(supportsNotificationsProvider)) ...[
           const SizedBox(height: 16),
           ...settingsListGroup(
             context,
@@ -193,10 +251,33 @@ class _UserSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                       },
                     ),
                   ),
+                  if (lastUpdateDate != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          context.localized.lastUpdateAt(lastUpdateDate!, lastUpdateDate!),
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: Theme.of(context).textTheme.bodyMedium?.color?.withAlpha(155),
+                              ),
+                        ),
+                      ),
+                    ),
                   SettingsMessageBox(
                     context.localized.notificationsIntervalClientReminder,
                     messageType: MessageType.info,
                   ),
+                  if (enabledBatteryOptimization == true)
+                    SettingsMessageBox(
+                      context.localized.batteryOptimizationDesc,
+                      messageType: MessageType.warning,
+                      onTap: () async {
+                        await BatteryOptimization.openBatteryOptimizationSettings();
+                        if (!mounted) return;
+                        await checkBatteryOptimization();
+                      },
+                    ),
                   if (!kIsWeb && Platform.isIOS)
                     SettingsMessageBox(
                       context.localized.notificationTimerIOSWarning,
@@ -221,21 +302,64 @@ class _UserSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                   }
                 },
               ),
+              SettingsListTileCheckbox(
+                label: Text(context.localized.includeHiddenItems),
+                subLabel: Text(context.localized.includeHiddenItemsDesc),
+                value: user?.includeHiddenViews ?? false,
+                onChanged: user?.updateNotificationsEnabled ?? false
+                    ? (val) async {
+                        final current = ref.read(userProvider);
+                        if (current == null || val == null) return;
+                        ref.read(userProvider.notifier).userState = current.copyWith(
+                          includeHiddenViews: val,
+                        );
+                        await ref.read(updateNotificationsProvider).registerBackgroundTask();
+                      }
+                    : null,
+              ),
               if (kDebugMode) ...[
                 SettingsListTile(
                   label: const Text('Show notification (debug)'),
-                  subLabel: const Text('Show a native notification with the latest ~5 items for the active account'),
                   onTap: () async => await ref.read(updateNotificationsProvider).executeBackgroundTask(),
                 ),
                 SettingsListTile(
                   label: const Text('Cancel all tasks (debug)'),
-                  subLabel: const Text('Cancel all scheduled background tasks for update notifications'),
                   onTap: () async => await ref.read(updateNotificationsProvider).cancelAllTasks(),
                 ),
               ],
             ],
           ),
         ],
+        const SizedBox(height: 16),
+        ...settingsListGroup(
+          context,
+          const SettingsLabelDivider(label: "Seerr"),
+          [
+            SettingsListTile(
+              label: Text(context.localized.seerr),
+              subLabel: Text(_seerrStatusLabel(context, user?.seerrCredentials, seerrUser)),
+              onTap: () => showSeerrConnectionDialog(context),
+            ),
+            if (seerrUser?.canManageRequests ?? false)
+              SettingsListTileCheckbox(
+                label: Text(context.localized.seerrRequestNotifications),
+                value: user?.seerrRequestsEnabled ?? false,
+                onChanged: (val) async {
+                  final current = ref.read(userProvider);
+                  if (current == null || val == null) return;
+
+                  ref.read(userProvider.notifier).userState = current.copyWith(seerrRequestsEnabled: val);
+
+                  if (val) {
+                    await NotificationService.requestPermission();
+                    await ref.read(updateNotificationsProvider).registerBackgroundTask();
+                  } else {
+                    await ref.read(updateNotificationsProvider).conditionallyUnregisterBackgroundTask();
+                  }
+                },
+              ),
+          ],
+        ),
         const SizedBox(height: 16),
         ...settingsListGroup(
           context,
@@ -270,11 +394,6 @@ class _UserSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                   context.localized.settingsLocalUrlSetDesc,
                 );
               },
-            ),
-            SettingsListTile(
-              label: Text(context.localized.seerr),
-              subLabel: Text(_seerrStatusLabel(context, user?.seerrCredentials, seerrUser)),
-              onTap: () => showSeerrConnectionDialog(context),
             ),
           ],
         ),

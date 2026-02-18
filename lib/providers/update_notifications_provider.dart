@@ -8,25 +8,42 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'package:fladder/background/update_notifications_worker.dart';
+import 'package:fladder/models/last_seen_notifications_model.dart';
 import 'package:fladder/providers/arguments_provider.dart';
 import 'package:fladder/providers/settings/client_settings_provider.dart';
 import 'package:fladder/providers/shared_provider.dart';
 
 final supportsNotificationsProvider = Provider.autoDispose<bool>((ref) {
   final leanBackMode = ref.watch(argumentsStateProvider.select((value) => value.leanBackMode));
-  return (!kIsWeb && !leanBackMode) && Platform.isAndroid;
+  return (!kIsWeb && !leanBackMode) &&
+      (Platform.isAndroid || Platform.isIOS || Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 });
 
 final updateNotificationsProvider = Provider<UpdateNotifications>((ref) => UpdateNotifications(ref));
 
+final notificationsProvider = StateProvider.autoDispose<LastSeenNotificationsModel>((ref) {
+  final shared = ref.watch(sharedUtilityProvider);
+  return shared.getLastSeenNotifications();
+});
+
 class UpdateNotifications {
-  UpdateNotifications(this.ref);
+  UpdateNotifications(this.ref) {
+    ref.onDispose(() {
+      _desktopTimer?.cancel();
+      _desktopTimer = null;
+    });
+  }
 
   final Ref ref;
+  Timer? _desktopTimer;
 
   Future<void> registerBackgroundTask() async {
     await Future.delayed(const Duration(milliseconds: 500));
-    final accounts = ref.read(sharedUtilityProvider).getAccounts().where((a) => a.updateNotificationsEnabled).toList();
+    final accounts = ref
+        .read(sharedUtilityProvider)
+        .getAccounts()
+        .where((a) => a.updateNotificationsEnabled || a.seerrRequestsEnabled)
+        .toList();
     if (accounts.isEmpty) {
       await unregisterBackgroundTask();
       return;
@@ -35,6 +52,15 @@ class UpdateNotifications {
     final interval = ref.read(clientSettingsProvider).updateNotificationsInterval;
 
     try {
+      if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+        _desktopTimer?.cancel();
+        _desktopTimer = Timer.periodic(interval, (_) {
+          performHeadlessUpdateCheck();
+        });
+        await performHeadlessUpdateCheck();
+        return;
+      }
+
       await Workmanager().registerPeriodicTask(
         updateTaskName,
         updateTaskName,
@@ -52,7 +78,11 @@ class UpdateNotifications {
 
   Future<void> unregisterBackgroundTask() async {
     try {
-      await Workmanager().cancelByUniqueName(updateTaskName);
+      _desktopTimer?.cancel();
+      _desktopTimer = null;
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+        await Workmanager().cancelByUniqueName(updateTaskName);
+      }
     } catch (e) {
       log('Error unregistering background task: $e');
     }
@@ -61,11 +91,17 @@ class UpdateNotifications {
   Future<void> conditionallyUnregisterBackgroundTask() async {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
-      final accounts =
-          ref.read(sharedUtilityProvider).getAccounts().where((a) => a.updateNotificationsEnabled).toList();
+      final accounts = ref
+          .read(sharedUtilityProvider)
+          .getAccounts()
+          .where((a) => a.updateNotificationsEnabled || a.seerrRequestsEnabled)
+          .toList();
       if (accounts.isEmpty) {
-        log('No accounts have update notifications enabled, unregistering background task');
-        await Workmanager().cancelByUniqueName(updateTaskName);
+        _desktopTimer?.cancel();
+        _desktopTimer = null;
+        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+          await Workmanager().cancelByUniqueName(updateTaskName);
+        }
         return;
       }
     } catch (e) {
@@ -76,16 +112,27 @@ class UpdateNotifications {
   //Used for debug purposes, to trigger the background task immediately and show a notification for any new items
   Future<void> executeBackgroundTask() async {
     try {
-      await Workmanager().registerOneOffTask(
-        updateTaskNameDebug,
-        updateTaskNameDebug,
-        existingWorkPolicy: ExistingWorkPolicy.replace,
-        constraints: Constraints(networkType: NetworkType.connected),
-      );
+      if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+        await performHeadlessUpdateCheck(debug: true);
+        return;
+      } else {
+        await Workmanager().registerOneOffTask(
+          updateTaskNameDebug,
+          updateTaskNameDebug,
+          existingWorkPolicy: ExistingWorkPolicy.replace,
+          constraints: Constraints(networkType: NetworkType.connected),
+        );
+      }
     } catch (e) {
       log('Error executing background task: $e');
     }
   }
 
-  Future<void> cancelAllTasks() => Workmanager().cancelAll();
+  Future<void> cancelAllTasks() async {
+    _desktopTimer?.cancel();
+    _desktopTimer = null;
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      await Workmanager().cancelAll();
+    }
+  }
 }

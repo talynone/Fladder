@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:auto_route/auto_route.dart' show DeepLink, PageRouteInfo;
+import 'package:auto_route/auto_route.dart' show DeepLink;
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,6 +44,7 @@ import 'package:fladder/src/video_player_helper.g.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/application_info.dart';
+import 'package:fladder/util/deep_link_helper.dart';
 import 'package:fladder/util/fladder_config.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/macos_window_helpers.dart';
@@ -78,7 +79,8 @@ void main(List<String> args) async {
   await NotificationService.init();
 
   // Check if running on android TV
-  final leanBackEnabled = !kIsWeb && Platform.isAndroid ? await NativeVideoActivity().isLeanBackEnabled() : false;
+  final leanBackEnabled =
+      defaultTargetPlatform == TargetPlatform.android ? await NativeVideoActivity().isLeanBackEnabled() : false;
 
   if (defaultTargetPlatform == TargetPlatform.windows) {
     await SMTCWindows.initialize();
@@ -92,7 +94,7 @@ void main(List<String> args) async {
 
   String windowArguments = "";
 
-  if (!kIsWeb && Platform.isMacOS) {
+  if (defaultTargetPlatform == TargetPlatform.macOS) {
     await WindowManipulator.initialize(enableWindowDelegate: true);
   }
 
@@ -104,13 +106,6 @@ void main(List<String> args) async {
   }
 
   final sharedPreferences = await SharedPreferences.getInstance();
-
-  await NotificationService.init();
-  try {
-    await Workmanager().initialize(update_worker.callbackDispatcher);
-  } catch (e) {
-    log("Failed to initialize Workmanager for background tasks: $e");
-  }
 
   PackageInfo packageInfo = await PackageInfo.fromPlatform();
 
@@ -219,15 +214,21 @@ class _MainState extends ConsumerState<Main> with WindowListener, WidgetsBinding
     WidgetsBinding.instance.addObserver(this);
     windowManager.addListener(this);
 
-    _notificationSub = NotificationService.notificationTapStream.listen((payload) {
-      if (payload == null || payload.isEmpty) return;
-      final route = payloadToRoute(Uri.parse(payload));
-      if (route != null) autoRouter.push(route);
-    });
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Delay to ensure the app is fully loaded before handling the initial notification payload
-      await Future.delayed(const Duration(seconds: 5));
+      await NotificationService.init().timeout(const Duration(seconds: 5));
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+        try {
+          await Workmanager().initialize(update_worker.callbackDispatcher).timeout(const Duration(seconds: 3));
+        } catch (e) {
+          log("Failed to initialize Workmanager for background tasks: $e");
+        }
+      }
+
+      _notificationSub = NotificationService.notificationTapStream.listen((payload) {
+        if (payload == null || payload.isEmpty) return;
+        final route = payloadToRoute(Uri.parse(payload));
+        if (route != null) autoRouter.push(route);
+      });
 
       NotificationService.getInitialNotificationPayload().then((payload) {
         if (payload == null || payload.isEmpty) return;
@@ -421,26 +422,6 @@ FutureOr<DeepLink> deepLinkBuilder(Uri? payload) {
     return DeepLink.path(pageRouteInfoToPath(route));
   }
   return DeepLink.defaultPath;
-}
-
-PageRouteInfo? payloadToRoute(Uri? payload) {
-  if (payload == null) return null;
-  if (payload.path.contains('/details')) {
-    return DetailsRoute(id: payload.queryParameters['id']!);
-  }
-  return null;
-}
-
-String pageRouteInfoToPath(PageRouteInfo route) {
-  try {
-    return switch (route) {
-      DetailsRoute() => '/details?id=${route.queryParams.get('id')}',
-      _ => '/',
-    };
-  } catch (e) {
-    log("Failed to convert route to path: $e");
-    return route.routeName;
-  }
 }
 
 final currentTitleProvider = StateProvider<String>((ref) => "Fladder");
