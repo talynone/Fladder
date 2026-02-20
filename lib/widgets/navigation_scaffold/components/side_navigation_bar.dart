@@ -19,6 +19,7 @@ import 'package:fladder/util/fladder_image.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/adaptive_fab.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/background_image.dart';
+import 'package:fladder/widgets/navigation_scaffold/components/collapse_button.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/destination_model.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/navigation_body.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/navigation_button.dart';
@@ -91,39 +92,43 @@ class _SideNavigationRail extends ConsumerState<SideNavigationRail> {
           child: widget.child,
         ),
         RepaintBoundary(
-          child: IgnorePointer(
-            child: Container(
-              width: blurWidth,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    surfaceColor.withAlpha(255),
-                    surfaceColor.withAlpha(175),
-                    surfaceColor.withAlpha(0),
-                  ],
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 250),
+            opacity: !fullScreenChildRoute ? 1 : 0,
+            child: IgnorePointer(
+              child: Container(
+                width: blurWidth,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      surfaceColor.withAlpha(255),
+                      surfaceColor.withAlpha(175),
+                      surfaceColor.withAlpha(0),
+                    ],
+                  ),
                 ),
+                child: useBlurredBackground
+                    ? ShaderMask(
+                        shaderCallback: (bounds) {
+                          return LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              Colors.white.withAlpha(255),
+                              Colors.white.withAlpha(175),
+                              Colors.white.withAlpha(0),
+                            ],
+                          ).createShader(
+                            Rect.fromLTRB(0, 0, blurWidth, bounds.height),
+                          );
+                        },
+                        blendMode: BlendMode.dstIn,
+                        child: const BackgroundImage(),
+                      )
+                    : null,
               ),
-              child: useBlurredBackground
-                  ? ShaderMask(
-                      shaderCallback: (bounds) {
-                        return LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [
-                            Colors.white.withAlpha(255),
-                            Colors.white.withAlpha(175),
-                            Colors.white.withAlpha(0),
-                          ],
-                        ).createShader(
-                          Rect.fromLTRB(0, 10, blurWidth, bounds.height),
-                        );
-                      },
-                      blendMode: BlendMode.dstIn,
-                      child: const BackgroundImage(),
-                    )
-                  : null,
             ),
           ),
         ),
@@ -144,26 +149,20 @@ class _SideNavigationRail extends ConsumerState<SideNavigationRail> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (shouldExpand) ...[
-                              Expanded(child: Text(context.localized.navigation)),
-                            ],
-                            IconButton(
-                              onPressed: !largeBar
-                                  ? () => widget.scaffoldKey.currentState?.openDrawer()
-                                  : () => ref
-                                      .read(clientSettingsProvider.notifier)
-                                      .update((state) => state.copyWith(expandSideBar: !state.expandSideBar)),
-                              icon: Icon(
-                                largeBar && expandedSideBar ? IconsaxPlusLinear.sidebar_left : IconsaxPlusLinear.menu,
-                              ),
-                              color: Theme.of(context).colorScheme.onSurface.withValues(
-                                    alpha: largeBar && expandedSideBar ? 0.65 : 1,
-                                  ),
-                            )
-                          ],
+                        child: CollapseButton(
+                          label: shouldExpand ? Expanded(child: Text(context.localized.navigation)) : null,
+                          keepVisible: !(largeBar && expandedSideBar),
+                          icon: Icon(
+                            largeBar && expandedSideBar ? IconsaxPlusLinear.sidebar_left : IconsaxPlusLinear.menu,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(
+                                  alpha: largeBar && expandedSideBar ? 0.65 : 1,
+                                ),
+                          ),
+                          onPressed: !largeBar
+                              ? () => widget.scaffoldKey.currentState?.openDrawer()
+                              : () => ref
+                                  .read(clientSettingsProvider.notifier)
+                                  .update((state) => state.copyWith(expandSideBar: !state.expandSideBar)),
                         ),
                       ),
                       if (largeBar) ...[
@@ -371,7 +370,7 @@ class _SideNavigationRail extends ConsumerState<SideNavigationRail> {
                         expanded: shouldExpand,
                         icon: const SizedBox.shrink(),
                         customIcon: const ExcludeFocusTraversal(
-                            child: SizedBox.square(dimension: 45, child: SettingsUserIcon())),
+                            child: SizedBox.square(dimension: 40, child: SettingsUserIcon())),
                         onPressed: () {
                           if (AdaptiveLayout.layoutModeOf(context) == LayoutMode.single) {
                             context.router.push(const SettingsRoute());
