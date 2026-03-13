@@ -47,6 +47,11 @@ _VideoPlayerSettingsModel _$VideoPlayerSettingsModelFromJson(
       screensaver:
           $enumDecodeNullable(_$ScreensaverEnumMap, json['screensaver']) ??
               Screensaver.logo,
+      enableSpeedBoost: json['enableSpeedBoost'] as bool? ?? false,
+      speedBoostRate: (json['speedBoostRate'] as num?)?.toDouble() ?? 2.0,
+      enableDoubleTapSeek: json['enableDoubleTapSeek'] as bool? ?? true,
+      enableAdvancedVideoOptions:
+          json['enableAdvancedVideoOptions'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$VideoPlayerSettingsModelToJson(
@@ -73,6 +78,10 @@ Map<String, dynamic> _$VideoPlayerSettingsModelToJson(
       'hotKeys': instance.hotKeys
           .map((k, e) => MapEntry(_$VideoHotKeysEnumMap[k]!, e)),
       'screensaver': _$ScreensaverEnumMap[instance.screensaver]!,
+      'enableSpeedBoost': instance.enableSpeedBoost,
+      'speedBoostRate': instance.speedBoostRate,
+      'enableDoubleTapSeek': instance.enableDoubleTapSeek,
+      'enableAdvancedVideoOptions': instance.enableAdvancedVideoOptions,
     };
 
 const _$BoxFitEnumMap = {
